@@ -1,0 +1,31 @@
+<table>
+    <tr>
+        <td>Name</td>
+        <td>Source</td>
+        <td>StartPosition</td>
+        <td>Audio</td>
+        <td>Subtitle</td>
+        <td>Status</td>
+        <td>Actions</td>
+    </tr>
+    {{- if not . }}
+    <tr><td colspan="7">No streams</td></tr>
+    {{- end }}
+    {{- range . }}
+    <tr>
+        <td>{{ .Name }}</td>
+        <td>{{ .Source }}</td>
+        <td>{{ .StartPosition }}</td>
+        <td>{{ .Audio }}</td>
+        <td>{{ .Subtitle }}</td>
+        <td>{{ .Status }}</td>
+        <td>
+            {{- $name := .Name }}
+            {{- range .Actions }}
+            <a href="/{{ . }}/{{ $name }}">{{ . }}</a>
+            {{- end }}
+        </td>
+    </tr>
+    {{- end }}
+</table>
+<a href="/launch">Launch a new stream</a> | <a href="/probe">Probe source</a>
