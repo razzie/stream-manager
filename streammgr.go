@@ -36,6 +36,9 @@ func NewStreamView(stream *Stream) *StreamView {
 		Status:        stream.Status(),
 		Actions:       []string{"start", "stop", "delete"},
 	}
+	if len(view.Source) > 128 {
+		view.Source = "..." + view.Source[len(view.Source)-100:]
+	}
 	return view
 }
 

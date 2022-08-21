@@ -1,12 +1,12 @@
 <table>
     <tr>
         <td>Name</td>
+        <td>Status</td>
+        <td>Actions</td>
         <td>Source</td>
         <td>StartPosition</td>
         <td>Audio</td>
         <td>Subtitle</td>
-        <td>Status</td>
-        <td>Actions</td>
     </tr>
     {{- if not . }}
     <tr><td colspan="7">No streams</td></tr>
@@ -14,10 +14,6 @@
     {{- range . }}
     <tr>
         <td>{{ .Name }}</td>
-        <td>{{ .Source }}</td>
-        <td>{{ .StartPosition }}</td>
-        <td>{{ .Audio }}</td>
-        <td>{{ .Subtitle }}</td>
         <td>{{ .Status }}</td>
         <td>
             {{- $name := .Name }}
@@ -25,6 +21,10 @@
             <a href="/{{ . }}/{{ $name }}">{{ . }}</a>
             {{- end }}
         </td>
+        <td>{{ .Source }}</td>
+        <td>{{ .StartPosition }}</td>
+        <td>{{ .Audio }}</td>
+        <td>{{ .Subtitle }}</td>
     </tr>
     {{- end }}
 </table>
