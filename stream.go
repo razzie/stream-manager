@@ -88,6 +88,7 @@ func NewStreamRunner(stream *Stream) *StreamRunner {
 }
 
 func (runner *StreamRunner) Start() error {
+	runner.cmd.Stdout = &runner.errBuf
 	runner.cmd.Stderr = &runner.errBuf
 	if err := runner.cmd.Start(); err != nil {
 		return err
@@ -106,8 +107,8 @@ func (runner *StreamRunner) IsRunning() bool {
 func (runner *StreamRunner) Err() error {
 	if runner.done.Load() {
 		errStr := runner.errBuf.String()
-		if idx := strings.LastIndex(errStr, "\n"); idx != -1 {
-			errStr = errStr[idx+1:]
+		if len(errStr) > 128 {
+			errStr = "..." + errStr[len(errStr)-128:]
 		}
 		if len(errStr) > 0 {
 			return fmt.Errorf("%s", errStr)
@@ -134,7 +135,8 @@ func ffmpegArgs(stream *Stream) (args []string) {
 		args = append(args, "-ss", stream.StartPosition)
 	}
 	if stream.Subtitle >= 0 {
-		args = append(args, "-vf", fmt.Sprintf("subtitles=%s:stream_index=%d", stream.Source, stream.Subtitle))
+		escapedSource := strings.ReplaceAll(stream.Source, ":", "\\:")
+		args = append(args, "-vf", fmt.Sprintf("subtitles='%s':stream_index=%d", escapedSource, stream.Subtitle))
 	}
 	args = append(args,
 		"-c:a", "aac", "-map", fmt.Sprintf("0:a:%d", stream.Audio), "-map", "0:v:0",

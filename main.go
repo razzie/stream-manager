@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"syscall"
 
 	"github.com/razzie/beepboop"
@@ -37,9 +38,23 @@ func init() {
 			panic(err)
 		}
 	}
+
+	if ffmpegPath, err := exec.LookPath("ffmpeg"); err != nil {
+		panic(err)
+	} else {
+		log.Println("ffmpeg path:", ffmpegPath)
+	}
+
+	if ffprobePath, err := exec.LookPath("ffprobe"); err != nil {
+		panic(err)
+	} else {
+		log.Println("ffprobe path:", ffprobePath)
+	}
 }
 
 func main() {
+	log.Println("stream-manager start")
+
 	sm := NewStreamManager(StreamTarget)
 
 	srv := beepboop.NewServer()
