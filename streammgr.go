@@ -28,6 +28,7 @@ type StreamEntry struct {
 	VideoChannel    int           `json:"video"`
 	AudioChannel    int           `json:"audio"`
 	SubtitleChannel int           `json:"subtitle"`
+	ReadRate        int           `json:"readrate"`
 }
 
 type StreamView struct {
@@ -45,9 +46,10 @@ func NewStreamView(stream *Stream) *StreamView {
 			VideoChannel:    stream.VideoChannel,
 			AudioChannel:    stream.AudioChannel,
 			SubtitleChannel: stream.SubtitleChannel,
+			ReadRate:        stream.ReadRate,
 		},
 		Status:  stream.Status(),
-		Actions: []string{"start", "stop", "delete"},
+		Actions: []string{"start", "stop", "clone", "delete"},
 	}
 	if len(view.Source) > 128 {
 		view.Source = "..." + view.Source[len(view.Source)-100:]
@@ -102,7 +104,8 @@ func (sm *StreamManager) launchInternal(entry *StreamEntry) error {
 		entry.StartPosition,
 		entry.VideoChannel,
 		entry.AudioChannel,
-		entry.SubtitleChannel)
+		entry.SubtitleChannel,
+		entry.ReadRate)
 	if err != nil {
 		return err
 	}
@@ -201,6 +204,10 @@ func (sm *StreamManager) Pages() []*beepboop.Page {
 			Handler: sm.handleStop,
 		},
 		{
+			Path:    "/clone/",
+			Handler: sm.handleClone,
+		},
+		{
 			Path:    "/delete/",
 			Handler: sm.handleDelete,
 		},
@@ -226,12 +233,21 @@ func (sm *StreamManager) handleLaunch(r *beepboop.PageRequest) *beepboop.View {
 		entry.VideoChannel = toInt(req.FormValue("video"))
 		entry.AudioChannel = toInt(req.FormValue("audio"))
 		entry.SubtitleChannel = toInt(req.FormValue("subtitle"))
+		entry.ReadRate = toInt(req.FormValue("readrate"))
 		if err := sm.Launch(&entry); err != nil {
 			return r.ErrorView(err.Error(), http.StatusBadRequest)
 		}
 		return r.RedirectView("/")
 	}
-	return nil
+	view := &StreamEntry{
+		ReadRate: 100,
+	}
+	if req.URL.Query().Has("clone") {
+		if stream := sm.Stream(req.URL.Query().Get("clone")); stream != nil {
+			view = &stream.StreamEntry
+		}
+	}
+	return r.Respond(view)
 }
 
 func (sm *StreamManager) handleProbe(r *beepboop.PageRequest) *beepboop.View {
@@ -265,6 +281,11 @@ func (sm *StreamManager) handleStop(r *beepboop.PageRequest) *beepboop.View {
 		return handleError(r, err)
 	}
 	return r.RedirectView("/")
+}
+
+func (sm *StreamManager) handleClone(r *beepboop.PageRequest) *beepboop.View {
+	name := r.RelPath
+	return r.RedirectView("/launch?clone=" + name)
 }
 
 func (sm *StreamManager) handleDelete(r *beepboop.PageRequest) *beepboop.View {

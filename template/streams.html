@@ -25,6 +25,7 @@
             {{ if ge .VideoChannel 0 }}video:{{ .VideoChannel }}{{ end }}
             {{ if ge .AudioChannel 0 }}audio:{{ .AudioChannel }}{{ end }}
             {{ if ge .SubtitleChannel 0 }}subtitle:{{ .SubtitleChannel }}{{ end }}
+            readrate:{{ .ReadRate }}%
         </td>
     </tr>
     {{- end }}

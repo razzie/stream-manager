@@ -1,21 +1,24 @@
 <form method="post">
     <label for="name">Stream name:</label>
-    <input type="text" id="name" name="name" /><br />
+    <input type="text" id="name" name="name" value="{{ .Name }}" /><br />
 
     <label for="source">Source:</label>
-    <input type="text" id="source" name="source" /><br />
+    <input type="text" id="source" name="source" value="{{ .Source }}" /><br />
 
     <label for="startpos">Start position:</label>
-    <input type="text" id="startpos" name="startpos" placeholder="0h0m0s" /><br />
+    <input type="text" id="startpos" name="startpos" value="{{ .StartPosition }}" /><br />
 
     <label for="video">Video stream #:</label>
-    <input type="number" id="video" name="video" value="0" min="-1" max="99" /><br />
+    <input type="number" id="video" name="video" min="-1" max="99" value="{{ .VideoChannel }}" /><br />
 
     <label for="audio">Audio stream #:</label>
-    <input type="number" id="audio" name="audio" value="0" min="-1" max="99" /><br />
+    <input type="number" id="audio" name="audio" min="-1" max="99" value="{{ .AudioChannel }}" /><br />
 
     <label for="subtitle">Embedded subtitle #:</label>
-    <input type="number" id="subtitle" name="subtitle" value="0" min="-1" max="99" /><br />
+    <input type="number" id="subtitle" name="subtitle" min="-1" max="99" value="{{ .SubtitleChannel }}" /><br />
+
+    <label for="readrate">Read rate %:</label>
+    <input type="number" id="readrate" name="readrate" min="100" max="1000" value="{{ .ReadRate }}" /><br />
 
     <button>Launch</button>
 </form>

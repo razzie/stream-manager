@@ -20,10 +20,11 @@ type Stream struct {
 	VideoChannel    int
 	AudioChannel    int
 	SubtitleChannel int
+	ReadRate        int
 	runner          atomic.Pointer[StreamRunner]
 }
 
-func NewStream(name, source, target string, startpos time.Duration, video, audio, subs int) (*Stream, error) {
+func NewStream(name, source, target string, startpos time.Duration, video, audio, subtitle, readrate int) (*Stream, error) {
 	if !namePattern.MatchString(name) {
 		return nil, fmt.Errorf("invalid name: %s", name)
 	}
@@ -40,7 +41,8 @@ func NewStream(name, source, target string, startpos time.Duration, video, audio
 		StartPosition:   startpos,
 		VideoChannel:    video,
 		AudioChannel:    audio,
-		SubtitleChannel: subs,
+		SubtitleChannel: subtitle,
+		ReadRate:        readrate,
 	}
 	return stream, nil
 }
@@ -139,7 +141,12 @@ func (runner *StreamRunner) Close() error {
 func ffmpegArgs(stream *Stream) (args []string) {
 	args = append(args,
 		"-hide_banner", "-loglevel", "error",
-		"-copyts", "-start_at_zero", "-preset", "ultrafast", "-re")
+		"-copyts", "-start_at_zero", "-preset", "ultrafast")
+	readrate := float32(stream.ReadRate) / 100.
+	if readrate < 1. {
+		readrate = 1.
+	}
+	args = append(args, "-readrate", fmt.Sprint(readrate))
 	if stream.StartPosition > 0 {
 		startpos := fmt.Sprint(stream.StartPosition.Seconds())
 		args = append(args, "-ss", startpos, "-i", stream.Source, "-ss", startpos)
