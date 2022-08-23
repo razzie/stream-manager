@@ -6,10 +6,13 @@
     <input type="text" id="source" name="source" /><br />
 
     <label for="startpos">Start position:</label>
-    <input type="text" id="startpos" name="startpos" placeholder="00:00:00.000" /><br />
+    <input type="text" id="startpos" name="startpos" placeholder="0h0m0s" /><br />
+
+    <label for="video">Video stream #:</label>
+    <input type="number" id="video" name="video" value="0" min="-1" max="99" /><br />
 
     <label for="audio">Audio stream #:</label>
-    <input type="number" id="audio" name="audio" value="0" min="0" max="99" /><br />
+    <input type="number" id="audio" name="audio" value="0" min="-1" max="99" /><br />
 
     <label for="subtitle">Embedded subtitle #:</label>
     <input type="number" id="subtitle" name="subtitle" value="0" min="-1" max="99" /><br />

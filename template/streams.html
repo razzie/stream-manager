@@ -4,12 +4,10 @@
         <td>Status</td>
         <td>Actions</td>
         <td>Source</td>
-        <td>StartPosition</td>
-        <td>Audio</td>
-        <td>Subtitle</td>
+        <td>Settings</td>
     </tr>
     {{- if not . }}
-    <tr><td colspan="7">No streams</td></tr>
+    <tr><td colspan="5">No streams</td></tr>
     {{- end }}
     {{- range . }}
     <tr>
@@ -22,9 +20,12 @@
             {{- end }}
         </td>
         <td>{{ .Source }}</td>
-        <td>{{ .StartPosition }}</td>
-        <td>{{ .Audio }}</td>
-        <td>{{ .Subtitle }}</td>
+        <td>
+            startpos:{{ .StartPosition }}
+            {{ if ge .VideoChannel 0 }}video:{{ .VideoChannel }}{{ end }}
+            {{ if ge .AudioChannel 0 }}audio:{{ .AudioChannel }}{{ end }}
+            {{ if ge .SubtitleChannel 0 }}subtitle:{{ .SubtitleChannel }}{{ end }}
+        </td>
     </tr>
     {{- end }}
 </table>

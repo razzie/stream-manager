@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"log"
@@ -9,8 +10,12 @@ import (
 	"os/exec"
 	"syscall"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/razzie/beepboop"
 )
+
+//go:embed favicon.png
+var favicon []byte
 
 var (
 	Port         int
@@ -18,6 +23,7 @@ var (
 	Password     string
 	StreamTarget string
 	Chroot       string
+	RedisConnStr string
 )
 
 func init() {
@@ -26,6 +32,7 @@ func init() {
 	flag.StringVar(&Password, "pass", "", "Password for basic http auth")
 	flag.StringVar(&StreamTarget, "target", "rtsp://localhost", "Remote stream server to publish to (rtsp/rtsps/etc)")
 	flag.StringVar(&Chroot, "chroot", "", "Chroot directory")
+	flag.StringVar(&RedisConnStr, "redis", "", "Redis connection string (redis://user:pass@host:port)")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
@@ -55,9 +62,19 @@ func init() {
 func main() {
 	log.Println("stream-manager start")
 
-	sm := NewStreamManager(StreamTarget)
+	var opt *redis.Options
+	var err error
+	if len(RedisConnStr) > 0 {
+		opt, err = redis.ParseURL(RedisConnStr)
+		if err != nil {
+			log.Println("failed to parse redis url:", err)
+		}
+	}
+
+	sm := NewStreamManager(StreamTarget, opt)
 
 	srv := beepboop.NewServer()
+	srv.FaviconPNG = favicon
 	srv.AddMiddlewares(AuthMiddleware(Username, Password))
 	srv.AddPages(sm.Pages()...)
 

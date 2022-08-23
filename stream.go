@@ -4,29 +4,43 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
+var namePattern = regexp.MustCompile("^[a-zA-Z0-9_-]+$")
+
 type Stream struct {
-	Name          string
-	Source        string
-	Target        string
-	StartPosition string
-	Audio         int
-	Subtitle      int
-	runner        atomic.Pointer[StreamRunner]
+	Name            string
+	Source          string
+	Target          string
+	StartPosition   time.Duration
+	VideoChannel    int
+	AudioChannel    int
+	SubtitleChannel int
+	runner          atomic.Pointer[StreamRunner]
 }
 
-func NewStream(name, source, target, startpos string, audio, subs int) (*Stream, error) {
-	// TODO: validate values
+func NewStream(name, source, target string, startpos time.Duration, video, audio, subs int) (*Stream, error) {
+	if !namePattern.MatchString(name) {
+		return nil, fmt.Errorf("invalid name: %s", name)
+	}
+	if len(source) == 0 {
+		return nil, fmt.Errorf("no source")
+	}
+	if len(target) == 0 {
+		return nil, fmt.Errorf("no target")
+	}
 	stream := &Stream{
-		Name:          name,
-		Source:        source,
-		Target:        target,
-		StartPosition: startpos,
-		Audio:         audio,
-		Subtitle:      subs,
+		Name:            name,
+		Source:          source,
+		Target:          target,
+		StartPosition:   startpos,
+		VideoChannel:    video,
+		AudioChannel:    audio,
+		SubtitleChannel: subs,
 	}
 	return stream, nil
 }
@@ -123,24 +137,29 @@ func (runner *StreamRunner) Close() error {
 }
 
 func ffmpegArgs(stream *Stream) (args []string) {
-	if len(stream.StartPosition) > 0 {
-		args = append(args, "-ss", stream.StartPosition)
-	}
 	args = append(args,
 		"-hide_banner", "-loglevel", "error",
-		"-copyts", "-re",
-		"-i", stream.Source,
-		"-c:v", "libx264", "-preset", "ultrafast")
-	if len(stream.StartPosition) > 0 {
-		args = append(args, "-ss", stream.StartPosition)
+		"-copyts", "-start_at_zero", "-preset", "ultrafast", "-re")
+	if stream.StartPosition > 0 {
+		startpos := fmt.Sprint(stream.StartPosition.Seconds())
+		args = append(args, "-ss", startpos, "-i", stream.Source, "-ss", startpos)
+	} else {
+		args = append(args, "-i", stream.Source)
 	}
-	if stream.Subtitle >= 0 {
+	if stream.VideoChannel >= 0 {
+		args = append(args, "-c:v", "libx264", "-map", fmt.Sprintf("0:v:%d", stream.VideoChannel))
+	}
+	if stream.AudioChannel >= 0 {
+		args = append(args, "-c:a", "aac", "-map", fmt.Sprintf("0:a:%d", stream.AudioChannel))
+	}
+	if stream.SubtitleChannel >= 0 {
 		escapedSource := strings.ReplaceAll(stream.Source, ":", "\\:")
-		args = append(args, "-vf", fmt.Sprintf("subtitles='%s':stream_index=%d", escapedSource, stream.Subtitle))
+		args = append(args, "-vf", fmt.Sprintf("subtitles='%s':stream_index=%d", escapedSource, stream.SubtitleChannel))
 	}
-	args = append(args,
-		"-c:a", "aac", "-map", fmt.Sprintf("0:a:%d", stream.Audio), "-map", "0:v:0",
-		"-f", "rtsp", "-rtsp_transport", "tcp", "-auth_type", "digest",
-		stream.Target+"/"+stream.Name)
+	target := stream.Target
+	if !strings.HasSuffix(target, "/") {
+		target += "/"
+	}
+	args = append(args, "-f", "rtsp", "-rtsp_transport", "tcp", "-auth_type", "digest", target+stream.Name)
 	return
 }

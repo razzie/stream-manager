@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
+	"time"
 
 	generic_sync "github.com/SaveTheRbtz/generic-sync-map-go"
+	"github.com/go-redis/redis/v8"
 	"github.com/razzie/beepboop"
 	"github.com/razzie/stream-manager/template"
 )
@@ -16,25 +21,33 @@ var (
 	ErrNotFound = fmt.Errorf("not found")
 )
 
+type StreamEntry struct {
+	Name            string        `json:"name"`
+	Source          string        `json:"source"`
+	StartPosition   time.Duration `json:"startpos"`
+	VideoChannel    int           `json:"video"`
+	AudioChannel    int           `json:"audio"`
+	SubtitleChannel int           `json:"subtitle"`
+}
+
 type StreamView struct {
-	Name          string
-	Source        string
-	StartPosition string
-	Audio         int
-	Subtitle      int
-	Status        string
-	Actions       []string
+	StreamEntry
+	Status  string
+	Actions []string
 }
 
 func NewStreamView(stream *Stream) *StreamView {
 	view := &StreamView{
-		Name:          stream.Name,
-		Source:        stream.Source,
-		StartPosition: stream.StartPosition,
-		Audio:         stream.Audio,
-		Subtitle:      stream.Subtitle,
-		Status:        stream.Status(),
-		Actions:       []string{"start", "stop", "delete"},
+		StreamEntry: StreamEntry{
+			Name:            stream.Name,
+			Source:          stream.Source,
+			StartPosition:   stream.StartPosition,
+			VideoChannel:    stream.VideoChannel,
+			AudioChannel:    stream.AudioChannel,
+			SubtitleChannel: stream.SubtitleChannel,
+		},
+		Status:  stream.Status(),
+		Actions: []string{"start", "stop", "delete"},
 	}
 	if len(view.Source) > 128 {
 		view.Source = "..." + view.Source[len(view.Source)-100:]
@@ -45,21 +58,81 @@ func NewStreamView(stream *Stream) *StreamView {
 type StreamManager struct {
 	target  string
 	streams generic_sync.MapOf[string, *Stream]
+	db      *redis.Client
 }
 
-func NewStreamManager(target string) *StreamManager {
-	return &StreamManager{
+func NewStreamManager(target string, opt *redis.Options) *StreamManager {
+	sm := &StreamManager{
 		target: target,
+	}
+	if opt != nil {
+		sm.db = redis.NewClient(opt)
+		sm.loadStreamsFromDB()
+	}
+	return sm
+}
+
+func (sm *StreamManager) loadStreamsFromDB() {
+	streamNames, err := sm.db.Keys(context.Background(), "*").Result()
+	if err != nil {
+		log.Println("db error:", err)
+	}
+	for _, name := range streamNames {
+		var entry StreamEntry
+		entryStr, err := sm.db.Get(context.Background(), name).Result()
+		if err != nil {
+			log.Println("db error:", err)
+			continue
+		}
+		if err := json.Unmarshal([]byte(entryStr), &entry); err != nil {
+			log.Println("json error:", err)
+			continue
+		}
+		if err := sm.launchInternal(&entry); err != nil {
+			log.Println("error while adding stream to list:", err)
+		}
 	}
 }
 
-func (sm *StreamManager) Launch(name, source, startpos string, audio, subs int) error {
-	stream, err := NewStream(name, source, sm.target, startpos, audio, subs)
+func (sm *StreamManager) launchInternal(entry *StreamEntry) error {
+	stream, err := NewStream(
+		entry.Name,
+		entry.Source,
+		sm.target,
+		entry.StartPosition,
+		entry.VideoChannel,
+		entry.AudioChannel,
+		entry.SubtitleChannel)
 	if err != nil {
 		return err
 	}
-	if _, loaded := sm.streams.LoadOrStore(name, stream); loaded {
+	if _, loaded := sm.streams.LoadOrStore(entry.Name, stream); loaded {
 		return fmt.Errorf("stream name already exists")
+	}
+	return nil
+}
+
+func (sm *StreamManager) Launch(entry *StreamEntry) error {
+	if err := sm.launchInternal(entry); err != nil {
+		return err
+	}
+	if sm.db != nil {
+		entryStr, err := json.Marshal(entry)
+		if err != nil {
+			log.Println("json error:", err)
+			return nil
+		}
+		if err := sm.db.Set(context.Background(), entry.Name, string(entryStr), 0).Err(); err != nil {
+			log.Println("error while saving stream to db:", err)
+		}
+	}
+	return nil
+}
+
+func (sm *StreamManager) Stream(name string) *StreamView {
+	stream, _ := sm.streams.Load(name)
+	if stream != nil {
+		return NewStreamView(stream)
 	}
 	return nil
 }
@@ -92,6 +165,11 @@ func (sm *StreamManager) Stop(name string) error {
 func (sm *StreamManager) Delete(name string) error {
 	if stream, ok := sm.streams.Load(name); ok {
 		sm.streams.Delete(name)
+		if sm.db != nil {
+			if err := sm.db.Del(context.Background(), name).Err(); err != nil {
+				log.Println("error while deleting stream from db:", err)
+			}
+		}
 		return stream.Close()
 	}
 	return ErrNotFound
@@ -136,13 +214,19 @@ func (sm *StreamManager) handleStreams(r *beepboop.PageRequest) *beepboop.View {
 func (sm *StreamManager) handleLaunch(r *beepboop.PageRequest) *beepboop.View {
 	req := r.Request
 	if req.Method == "POST" {
+		toInt := func(str string) int {
+			val, _ := strconv.ParseInt(str, 10, 32)
+			return int(val)
+		}
 		req.ParseForm()
-		name := req.FormValue("name")
-		source := req.FormValue("source")
-		startpos := req.FormValue("startpos")
-		audio, _ := strconv.ParseInt(req.FormValue("audio"), 10, 64)
-		subtitle, _ := strconv.ParseInt(req.FormValue("subtitle"), 10, 64)
-		if err := sm.Launch(name, source, startpos, int(audio), int(subtitle)); err != nil {
+		var entry StreamEntry
+		entry.Name = req.FormValue("name")
+		entry.Source = req.FormValue("source")
+		entry.StartPosition, _ = time.ParseDuration(req.FormValue("startpos"))
+		entry.VideoChannel = toInt(req.FormValue("video"))
+		entry.AudioChannel = toInt(req.FormValue("audio"))
+		entry.SubtitleChannel = toInt(req.FormValue("subtitle"))
+		if err := sm.Launch(&entry); err != nil {
 			return r.ErrorView(err.Error(), http.StatusBadRequest)
 		}
 		return r.RedirectView("/")
